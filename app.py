@@ -178,7 +178,7 @@ if base_lista:
             "🟡 Farmadon", "⚪ Nuevo Siglo", "🔴 Locatel", "🔘 Farm. Saas"
         ]
         
-        col_dif_nombre = "Dif. vs Calox"
+        col_dif_nombre = "% Dif.   "
         
         tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
         for g in grupos_ui:
