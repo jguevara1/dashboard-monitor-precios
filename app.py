@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -21,11 +21,18 @@ fecha_act_str = "Desconocida"
 try:
     if os.path.exists("Base_Actualizada.xlsx"):
         timestamp = os.path.getmtime("Base_Actualizada.xlsx")
-        fecha_act_str = datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y %I:%M %p')
+        # Restamos 4 horas para ajustar la hora del servidor (UTC) a hora de Venezuela (VET)
+        fecha_ve = datetime.fromtimestamp(timestamp) - timedelta(hours=4)
+        fecha_act_str = fecha_ve.strftime('%d/%m/%Y %I:%M %p')
 except: pass
 
 try:
     df_base = pd.read_excel("Base_Actualizada.xlsx")
+    
+    # Limpiamos sufijos _x si existen por el cruce y descartamos los _y
+    df_base.columns = [c[:-2] if c.endswith('_x') else c for c in df_base.columns]
+    df_base = df_base.loc[:, ~df_base.columns.str.endswith('_y')]
+    
     st.sidebar.success("✅ Base conectada.")
     st.sidebar.caption(f"📅 **Última Extracción:**\n{fecha_act_str}")
     
@@ -67,11 +74,15 @@ if base_lista:
     
     df_grupo = df_base[df_base["Grupo_Calox"] == grupo_seleccionado].copy()
     
+    # Evitamos filas duplicadas si el catálogo tenía códigos repetidos
+    if "Codigo_IMS" in df_grupo.columns:
+        df_grupo = df_grupo.drop_duplicates(subset=["Codigo_IMS"])
+    
     st.markdown("#### Matriz de Revisión de Precios")
     
     datos_finales = []
     for _, f in df_grupo.iterrows():
-        prod_name = str(f.get("Producto", ""))
+        prod_name = str(f.get("Producto", f.get("PACK", "")))
         if prod_name.strip() == "" or prod_name.lower() in ["nan", "none"]:
             continue
             
@@ -86,7 +97,7 @@ if base_lista:
 
         ms_q_val = f.get("%MS Q", 0) 
         if pd.isna(ms_q_val) or str(ms_q_val).strip().lower() in ["nan", "none", ""]: ms_q_val = 0
-        ms_q_str = fmt_pct_ms(ms_q_val) # Formateamos el MS directamente aquí
+        ms_q_str = fmt_pct_ms(ms_q_val)
 
         pres_val = f.get("Presentación", f.get("Presentacion", ""))
         try: pres_val = str(int(float(pres_val))) 
@@ -107,69 +118,72 @@ if base_lista:
             f_saas, d_saas, calc_dcto(f_saas, d_saas)
         ])
 
-    columnas_agrupadas = pd.MultiIndex.from_tuples([
-        ("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc."),
-        ("🔵 Farmatodo", "P. Full"), ("🔵 Farmatodo", "P. Oferta"), ("🔵 Farmatodo", "% Desc."),
-        ("🟢 Cobeca", "P. Full"), ("🟢 Cobeca", "P. Oferta"), ("🟢 Cobeca", "% Desc."),
-        ("🟠 Nena", "P. Full"), ("🟠 Nena", "P. Oferta"), ("🟠 Nena", "% Desc."),
-        ("🟣 San Anselmo", "P. Full"), ("🟣 San Anselmo", "P. Oferta"), ("🟣 San Anselmo", "% Desc."),
-        ("🟡 Farmadon", "P. Full"), ("🟡 Farmadon", "P. Oferta"), ("🟡 Farmadon", "% Desc."),
-        ("⚪ Nuevo Siglo", "P. Full"), ("⚪ Nuevo Siglo", "P. Oferta"), ("⚪ Nuevo Siglo", "% Desc."),
-        ("🔴 Locatel", "P. Full"), ("🔴 Locatel", "P. Oferta"), ("🔴 Locatel", "% Desc."),
-        ("🔘 Farm. Saas", "P. Full"), ("🔘 Farm. Saas", "P. Oferta"), ("🔘 Farm. Saas", "% Desc.")
-    ])
+    if not datos_finales:
+        st.warning("No hay productos registrados para mostrar en este grupo.")
+    else:
+        columnas_agrupadas = pd.MultiIndex.from_tuples([
+            ("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc."),
+            ("🔵 Farmatodo", "P. Full"), ("🔵 Farmatodo", "P. Oferta"), ("🔵 Farmatodo", "% Desc."),
+            ("🟢 Cobeca", "P. Full"), ("🟢 Cobeca", "P. Oferta"), ("🟢 Cobeca", "% Desc."),
+            ("🟠 Nena", "P. Full"), ("🟠 Nena", "P. Oferta"), ("🟠 Nena", "% Desc."),
+            ("🟣 San Anselmo", "P. Full"), ("🟣 San Anselmo", "P. Oferta"), ("🟣 San Anselmo", "% Desc."),
+            ("🟡 Farmadon", "P. Full"), ("🟡 Farmadon", "P. Oferta"), ("🟡 Farmadon", "% Desc."),
+            ("⚪ Nuevo Siglo", "P. Full"), ("⚪ Nuevo Siglo", "P. Oferta"), ("⚪ Nuevo Siglo", "% Desc."),
+            ("🔴 Locatel", "P. Full"), ("🔴 Locatel", "P. Oferta"), ("🔴 Locatel", "% Desc."),
+            ("🔘 Farm. Saas", "P. Full"), ("🔘 Farm. Saas", "P. Oferta"), ("🔘 Farm. Saas", "% Desc.")
+        ])
 
-    df_final = pd.DataFrame(datos_finales, columns=columnas_agrupadas)
-    
-    # Convertimos las 5 primeras columnas en el Índice para que queden Fijas al hacer scroll
-    df_final.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
-
-    def aplicar_estilos_matriz(df):
-        styles = pd.DataFrame('', index=df.index, columns=df.columns)
-        for i in range(len(df.index)):
-            # El laboratorio ahora vive en el nivel 2 del índice
-            is_calox = "CALOX" in str(df.index[i][2]).upper()
-            for col in df.columns:
-                farmacia, campo = col[0], col[1]
-                
-                if "Farmatodo" in farmacia: bg_color = "#eaf2f8"      
-                elif "Cobeca" in farmacia: bg_color = "#e9f7ef"       
-                elif "Nena" in farmacia: bg_color = "#fdf2e9"         
-                elif "San Anselmo" in farmacia: bg_color = "#f5eef8"  
-                elif "Farmadon" in farmacia: bg_color = "#fcf3cf"     
-                elif "Nuevo Siglo" in farmacia: bg_color = "#f2f3f4"  
-                elif "Locatel" in farmacia: bg_color = "#fdedec"      
-                elif "Saas" in farmacia: bg_color = "#f2f4f4"         
-                else: bg_color = "#ffffff"                            
-                
-                font_weight = "bold" if is_calox else "normal"
-                if is_calox: bg_color = "#e0e0e0" 
-                
-                borde_izq = "border-left: 2px solid #bdc3c7;" if campo == "P. Full" else ""
-                styles.iat[i, df.columns.get_loc(col)] = f"background-color: {bg_color}; font-weight: {font_weight}; {borde_izq}"
+        df_final = pd.DataFrame(datos_finales, columns=columnas_agrupadas)
         
-        return styles
+        # Aseguramos que no existan índices duplicados para evitar el KeyError en Styler
+        df_final = df_final.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
+        
+        # Convertimos las 5 primeras columnas en el Índice para que queden Fijas al hacer scroll
+        df_final.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
 
-    formato_columnas = {
-        ("🔵 Farmatodo", "P. Full"): fmt_precio, ("🔵 Farmatodo", "P. Oferta"): fmt_precio, ("🔵 Farmatodo", "% Desc."): fmt_pct,
-        ("🟢 Cobeca", "P. Full"): fmt_precio, ("🟢 Cobeca", "P. Oferta"): fmt_precio, ("🟢 Cobeca", "% Desc."): fmt_pct,
-        ("🟠 Nena", "P. Full"): fmt_precio, ("🟠 Nena", "P. Oferta"): fmt_precio, ("🟠 Nena", "% Desc."): fmt_pct,
-        ("🟣 San Anselmo", "P. Full"): fmt_precio, ("🟣 San Anselmo", "P. Oferta"): fmt_precio, ("🟣 San Anselmo", "% Desc."): fmt_pct,
-        ("🟡 Farmadon", "P. Full"): fmt_precio, ("🟡 Farmadon", "P. Oferta"): fmt_precio, ("🟡 Farmadon", "% Desc."): fmt_pct,
-        ("⚪ Nuevo Siglo", "P. Full"): fmt_precio, ("⚪ Nuevo Siglo", "P. Oferta"): fmt_precio, ("⚪ Nuevo Siglo", "% Desc."): fmt_pct,
-        ("🔴 Locatel", "P. Full"): fmt_precio, ("🔴 Locatel", "P. Oferta"): fmt_precio, ("🔴 Locatel", "% Desc."): fmt_pct,
-        ("🔘 Farm. Saas", "P. Full"): fmt_precio, ("🔘 Farm. Saas", "P. Oferta"): fmt_precio, ("🔘 Farm. Saas", "% Desc."): fmt_pct
-    }
+        def aplicar_estilos_matriz(df):
+            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+            for i in range(len(df.index)):
+                is_calox = "CALOX" in str(df.index[i][2]).upper()
+                for col in df.columns:
+                    farmacia, campo = col[0], col[1]
+                    
+                    if "Farmatodo" in farmacia: bg_color = "#eaf2f8"      
+                    elif "Cobeca" in farmacia: bg_color = "#e9f7ef"       
+                    elif "Nena" in farmacia: bg_color = "#fdf2e9"         
+                    elif "San Anselmo" in farmacia: bg_color = "#f5eef8"  
+                    elif "Farmadon" in farmacia: bg_color = "#fcf3cf"     
+                    elif "Nuevo Siglo" in farmacia: bg_color = "#f2f3f4"  
+                    elif "Locatel" in farmacia: bg_color = "#fdedec"      
+                    elif "Saas" in farmacia: bg_color = "#f2f4f4"         
+                    else: bg_color = "#ffffff"                            
+                    
+                    font_weight = "bold" if is_calox else "normal"
+                    if is_calox: bg_color = "#e0e0e0" 
+                    
+                    borde_izq = "border-left: 2px solid #bdc3c7;" if campo == "P. Full" else ""
+                    styles.iat[i, df.columns.get_loc(col)] = f"background-color: {bg_color}; font-weight: {font_weight}; {borde_izq}"
+            
+            return styles
 
-    df_estilizado = df_final.style.apply(aplicar_estilos_matriz, axis=None).format(formato_columnas)
-    
-    # Función exclusiva para poner en negrita a Calox en las columnas congeladas
-    def estilo_indice(val):
-        if 'CALOX' in str(val).upper():
-            return 'font-weight: bold; color: black;'
-        return ''
-    
-    df_estilizado = df_estilizado.map_index(estilo_indice, axis=0)
-    
-    # Renderizamos sin ocultar el índice, ya que ahora contiene la información importante
-    st.dataframe(df_estilizado, use_container_width=True)
+        formato_columnas = {
+            ("🔵 Farmatodo", "P. Full"): fmt_precio, ("🔵 Farmatodo", "P. Oferta"): fmt_precio, ("🔵 Farmatodo", "% Desc."): fmt_pct,
+            ("🟢 Cobeca", "P. Full"): fmt_precio, ("🟢 Cobeca", "P. Oferta"): fmt_precio, ("🟢 Cobeca", "% Desc."): fmt_pct,
+            ("🟠 Nena", "P. Full"): fmt_precio, ("🟠 Nena", "P. Oferta"): fmt_precio, ("🟠 Nena", "% Desc."): fmt_pct,
+            ("🟣 San Anselmo", "P. Full"): fmt_precio, ("🟣 San Anselmo", "P. Oferta"): fmt_precio, ("🟣 San Anselmo", "% Desc."): fmt_pct,
+            ("🟡 Farmadon", "P. Full"): fmt_precio, ("🟡 Farmadon", "P. Oferta"): fmt_precio, ("🟡 Farmadon", "% Desc."): fmt_pct,
+            ("⚪ Nuevo Siglo", "P. Full"): fmt_precio, ("⚪ Nuevo Siglo", "P. Oferta"): fmt_precio, ("⚪ Nuevo Siglo", "% Desc."): fmt_pct,
+            ("🔴 Locatel", "P. Full"): fmt_precio, ("🔴 Locatel", "P. Oferta"): fmt_precio, ("🔴 Locatel", "% Desc."): fmt_pct,
+            ("🔘 Farm. Saas", "P. Full"): fmt_precio, ("🔘 Farm. Saas", "P. Oferta"): fmt_precio, ("🔘 Farm. Saas", "% Desc."): fmt_pct
+        }
+
+        df_estilizado = df_final.style.apply(aplicar_estilos_matriz, axis=None).format(formato_columnas)
+        
+        def estilo_indice(val):
+            if 'CALOX' in str(val).upper():
+                return 'font-weight: bold; color: black;'
+            return ''
+        
+        df_estilizado = df_estilizado.map_index(estilo_indice, axis=0)
+        
+        st.dataframe(df_estilizado, use_container_width=True)
