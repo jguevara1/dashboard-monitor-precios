@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 from datetime import datetime, timedelta
 import warnings
@@ -43,39 +44,46 @@ except:
     base_lista = False
 
 def calc_dcto(full, desc):
-    if full > 0 and desc > 0 and full > desc: return (full - desc) / full
+    f_r = round(full, 2)
+    d_r = round(desc, 2)
+    if f_r > 0 and d_r > 0 and f_r > d_r:
+        return (f_r - d_r) / f_r
     return 0.0
 
 def precio_efectivo(full, desc):
     try:
-        d = float(desc) if not pd.isna(desc) else 0.0
-        f = float(full) if not pd.isna(full) else 0.0
+        d = round(float(desc), 2) if not pd.isna(desc) else 0.0
+        f = round(float(full), 2) if not pd.isna(full) else 0.0
         return d if d > 0 else f
     except:
         return 0.0
 
 def calc_vs_calox(precio_calox, precio_comp, es_calox):
-    if es_calox or precio_calox <= 0 or precio_comp <= 0:
-        return None
-    return (precio_calox - precio_comp) / precio_comp
+    p_cal_r = round(precio_calox, 2)
+    p_cmp_r = round(precio_comp, 2)
+    if es_calox or p_cal_r <= 0 or p_cmp_r <= 0:
+        return np.nan
+    return (p_cal_r - p_cmp_r) / p_cmp_r
 
 def fmt_precio(val):
     try: 
-        v = float(val)
-        if pd.isna(v) or v == 0.0: return "" 
+        if pd.isna(val): return ""
+        v = round(float(val), 2)
+        if v == 0.0: return "" 
         return "${:.2f}".format(v)
     except: return str(val) if str(val).lower() not in ["nan", "none", ""] else ""
 
 def fmt_pct(val):
     try: 
+        if pd.isna(val): return ""
         v = float(val)
-        if pd.isna(v) or v == 0.0: return ""
+        if v == 0.0: return ""
         return "{:.1%}".format(v)
     except: return str(val) if str(val).lower() not in ["nan", "none", ""] else ""
 
 def fmt_diff(val):
     try:
-        if val is None or pd.isna(val): return ""
+        if pd.isna(val): return ""
         v = float(val)
         return "{:+.1%}".format(v)
     except: return ""
@@ -112,7 +120,7 @@ if base_lista:
         ("Saas", "PFull_Saas", "PDesc_Saas"),
     ]
 
-    # Extraemos los precios efectivos de Calox (por presentación y general del grupo)
+    # Extraemos los precios efectivos de Calox redondeados a 2 decimales
     df_calox = df_grupo[df_grupo["Laboratorio"].astype(str).str.upper().str.contains("CALOX", na=False)]
     calox_por_pres = {}
     calox_general = {c[0]: 0.0 for c in canales}
@@ -150,11 +158,10 @@ if base_lista:
         fila_datos = [ms_q_str, prod_name, lab_str, pres_val, obj_val]
 
         for nombre_c, col_f, col_d in canales:
-            p_full = float(f.get(col_f, 0.0) or 0.0)
-            p_desc = float(f.get(col_d, 0.0) or 0.0)
+            p_full = round(float(f.get(col_f, 0.0) or 0.0), 2)
+            p_desc = round(float(f.get(col_d, 0.0) or 0.0), 2)
             p_comp_ef = precio_efectivo(p_full, p_desc)
             
-            # Buscamos el precio de Calox de la misma presentación o el general del grupo
             p_calox_ref = calox_por_pres.get(pres_val, {}).get(nombre_c, 0.0)
             if p_calox_ref == 0.0:
                 p_calox_ref = calox_general.get(nombre_c, 0.0)
@@ -205,11 +212,11 @@ if base_lista:
                         bg_color = "#e0e0e0" 
                     elif campo == "Dif. %":
                         val = df.iat[i, df.columns.get_loc(col)]
-                        if val is not None and not pd.isna(val):
+                        if not pd.isna(val):
                             if val < 0:
-                                text_color = "color: #1e8449; font-weight: bold;" # Verde: Calox más barato
+                                text_color = "color: #1e8449; font-weight: bold;"
                             elif val > 0:
-                                text_color = "color: #c0392b; font-weight: bold;" # Rojo: Calox más caro
+                                text_color = "color: #c0392b; font-weight: bold;"
                     
                     borde_izq = "border-left: 2px solid #bdc3c7;" if campo == "P. Full" else ""
                     styles.iat[i, df.columns.get_loc(col)] = f"background-color: {bg_color}; font-weight: {font_weight}; {text_color} {borde_izq}"
@@ -223,7 +230,7 @@ if base_lista:
             formato_columnas[(g, "% Desc.")] = fmt_pct
             formato_columnas[(g, "Dif. %")] = fmt_diff
 
-        df_estilizado = df_final.style.apply(aplicar_estilos_matriz, axis=None).format(formato_columnas)
+        df_estilizado = df_final.style.apply(aplicar_estilos_matriz, axis=None).format(formato_columnas, na_rep="")
         
         def estilo_indice(val):
             if 'CALOX' in str(val).upper():
