@@ -188,7 +188,7 @@ if base_lista:
         df_num = df_num.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
         df_num.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
 
-        # Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
+# Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
         df_display = df_num.copy().astype(object)
         for g in grupos_ui:
             df_display[(g, "P. Full")] = df_num[(g, "P. Full")].apply(fmt_precio)
@@ -218,7 +218,6 @@ if base_lista:
                     if is_calox: 
                         bg_color = "#e0e0e0" 
                     elif campo == "Dif. %":
-                        # Evaluamos el signo usando la matriz numérica original
                         val = df_num.iat[i, df_num.columns.get_loc(col)]
                         if not pd.isna(val):
                             if val < 0:
@@ -240,4 +239,16 @@ if base_lista:
         
         df_estilizado = df_estilizado.map_index(estilo_indice, axis=0)
         
-        st.dataframe(df_estilizado, use_container_width=True)
+        # Configuramos ancho holgado para que los porcentajes >100% no se corten
+        config_columnas = {}
+        for g in grupos_ui:
+            config_columnas[f"{g}_P. Full"] = st.column_config.TextColumn("P. Full", width=75)
+            config_columnas[f"{g}_P. Oferta"] = st.column_config.TextColumn("P. Oferta", width=75)
+            config_columnas[f"{g}_% Desc."] = st.column_config.TextColumn("% Desc.", width=75)
+            config_columnas[f"{g}_Dif. %"] = st.column_config.TextColumn("Dif. %", width=85)
+
+        st.dataframe(
+            df_estilizado,
+            column_config=config_columnas,
+            use_container_width=False
+        )
