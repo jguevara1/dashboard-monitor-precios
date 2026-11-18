@@ -178,7 +178,7 @@ if base_lista:
             "🟡 Farmadon", "⚪ Nuevo Siglo", "🔴 Locatel", "🔘 Farm. Saas"
         ]
         
-tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
+        tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
         for g in grupos_ui:
             # Agregamos espacios no separables (\u00A0) en Dif. % para forzar un ancho mayor en Streamlit MultiIndex
             tuplas_cols.extend([
