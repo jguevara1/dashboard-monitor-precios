@@ -245,7 +245,7 @@ if base_lista:
             config_columnas[f"{g}_P. Full"] = st.column_config.TextColumn("P. Full", width=75)
             config_columnas[f"{g}_P. Oferta"] = st.column_config.TextColumn("P. Oferta", width=75)
             config_columnas[f"{g}_% Desc."] = st.column_config.TextColumn("% Desc.", width=75)
-            config_columnas[f"{g}_Dif. %"] = st.column_config.TextColumn("Dif. %", width=85)
+            config_columnas[f"{g}_Dif. %"] = st.column_config.TextColumn("Dif. %", width=90)
 
         st.dataframe(
             df_estilizado,
