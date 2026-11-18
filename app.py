@@ -120,7 +120,6 @@ if base_lista:
         ("Saas", "PFull_Saas", "PDesc_Saas"),
     ]
 
-    # Extraemos los precios efectivos de Calox redondeados a 2 decimales
     df_calox = df_grupo[df_grupo["Laboratorio"].astype(str).str.upper().str.contains("CALOX", na=False)]
     calox_por_pres = {}
     calox_general = {c[0]: 0.0 for c in canales}
@@ -184,10 +183,18 @@ if base_lista:
             tuplas_cols.extend([(g, "P. Full"), (g, "P. Oferta"), (g, "% Desc."), (g, "Dif. %")])
 
         columnas_agrupadas = pd.MultiIndex.from_tuples(tuplas_cols)
-        df_final = pd.DataFrame(datos_finales, columns=columnas_agrupadas)
+        df_num = pd.DataFrame(datos_finales, columns=columnas_agrupadas)
         
-        df_final = df_final.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
-        df_final.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
+        df_num = df_num.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
+        df_num.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
+
+        # Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
+        df_display = df_num.copy().astype(object)
+        for g in grupos_ui:
+            df_display[(g, "P. Full")] = df_num[(g, "P. Full")].apply(fmt_precio)
+            df_display[(g, "P. Oferta")] = df_num[(g, "P. Oferta")].apply(fmt_precio)
+            df_display[(g, "% Desc.")] = df_num[(g, "% Desc.")].apply(fmt_pct)
+            df_display[(g, "Dif. %")] = df_num[(g, "Dif. %")].apply(fmt_diff)
 
         def aplicar_estilos_matriz(df):
             styles = pd.DataFrame('', index=df.index, columns=df.columns)
@@ -211,7 +218,8 @@ if base_lista:
                     if is_calox: 
                         bg_color = "#e0e0e0" 
                     elif campo == "Dif. %":
-                        val = df.iat[i, df.columns.get_loc(col)]
+                        # Evaluamos el signo usando la matriz numérica original
+                        val = df_num.iat[i, df_num.columns.get_loc(col)]
                         if not pd.isna(val):
                             if val < 0:
                                 text_color = "color: #1e8449; font-weight: bold;"
@@ -223,14 +231,7 @@ if base_lista:
             
             return styles
 
-        formato_columnas = {}
-        for g in grupos_ui:
-            formato_columnas[(g, "P. Full")] = fmt_precio
-            formato_columnas[(g, "P. Oferta")] = fmt_precio
-            formato_columnas[(g, "% Desc.")] = fmt_pct
-            formato_columnas[(g, "Dif. %")] = fmt_diff
-
-        df_estilizado = df_final.style.apply(aplicar_estilos_matriz, axis=None).format(formato_columnas, na_rep="")
+        df_estilizado = df_display.style.apply(aplicar_estilos_matriz, axis=None)
         
         def estilo_indice(val):
             if 'CALOX' in str(val).upper():
