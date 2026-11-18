@@ -178,14 +178,15 @@ if base_lista:
             "🟡 Farmadon", "⚪ Nuevo Siglo", "🔴 Locatel", "🔘 Farm. Saas"
         ]
         
+        col_dif_nombre = "Dif. vs Calox"
+        
         tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
         for g in grupos_ui:
-            # Agregamos espacios no separables (\u00A0) en Dif. % para forzar un ancho mayor en Streamlit MultiIndex
             tuplas_cols.extend([
                 (g, "P. Full"),
                 (g, "P. Oferta"),
                 (g, "% Desc."),
-                (g, "\u00A0\u00A0Dif. %\u00A0\u00A0")
+                (g, col_dif_nombre)
             ])
 
         columnas_agrupadas = pd.MultiIndex.from_tuples(tuplas_cols)
@@ -194,13 +195,13 @@ if base_lista:
         df_num = df_num.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
         df_num.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
 
-        # Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
-        df_display = df_num.copy().astype(object)
+        # Creamos la tabla de texto manteniendo intacto el MultiIndex
+        df_display = pd.DataFrame(index=df_num.index, columns=df_num.columns, dtype=object)
         for g in grupos_ui:
             df_display[(g, "P. Full")] = df_num[(g, "P. Full")].apply(fmt_precio)
             df_display[(g, "P. Oferta")] = df_num[(g, "P. Oferta")].apply(fmt_precio)
             df_display[(g, "% Desc.")] = df_num[(g, "% Desc.")].apply(fmt_pct)
-            df_display[(g, "\u00A0\u00A0Dif. %\u00A0\u00A0")] = df_num[(g, "\u00A0\u00A0Dif. %\u00A0\u00A0")].apply(fmt_diff)
+            df_display[(g, col_dif_nombre)] = df_num[(g, col_dif_nombre)].apply(fmt_diff)
 
         def aplicar_estilos_matriz(df):
             styles = pd.DataFrame('', index=df.index, columns=df.columns)
@@ -223,7 +224,7 @@ if base_lista:
                     text_color = ""
                     if is_calox: 
                         bg_color = "#e0e0e0" 
-                    elif "Dif. %" in campo:
+                    elif campo == col_dif_nombre:
                         val = df_num.iat[i, df_num.columns.get_loc(col)]
                         if not pd.isna(val):
                             if val < 0:
