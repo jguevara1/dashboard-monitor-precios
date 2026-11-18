@@ -178,9 +178,15 @@ if base_lista:
             "🟡 Farmadon", "⚪ Nuevo Siglo", "🔴 Locatel", "🔘 Farm. Saas"
         ]
         
-        tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
+tuplas_cols = [("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")]
         for g in grupos_ui:
-            tuplas_cols.extend([(g, "P. Full"), (g, "P. Oferta"), (g, "% Desc."), (g, "Dif. %")])
+            # Agregamos espacios no separables (\u00A0) en Dif. % para forzar un ancho mayor en Streamlit MultiIndex
+            tuplas_cols.extend([
+                (g, "P. Full"),
+                (g, "P. Oferta"),
+                (g, "% Desc."),
+                (g, "\u00A0\u00A0Dif. %\u00A0\u00A0")
+            ])
 
         columnas_agrupadas = pd.MultiIndex.from_tuples(tuplas_cols)
         df_num = pd.DataFrame(datos_finales, columns=columnas_agrupadas)
@@ -188,13 +194,13 @@ if base_lista:
         df_num = df_num.drop_duplicates(subset=[("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")])
         df_num.set_index([("", "%MS Q"), ("", "Producto"), ("", "Laboratorio"), ("", "Pres."), ("", "Obj. Merc.")], inplace=True)
 
-# Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
+        # Creamos una copia de texto limpio para evitar que Streamlit dibuje "None" o "NaN"
         df_display = df_num.copy().astype(object)
         for g in grupos_ui:
             df_display[(g, "P. Full")] = df_num[(g, "P. Full")].apply(fmt_precio)
             df_display[(g, "P. Oferta")] = df_num[(g, "P. Oferta")].apply(fmt_precio)
             df_display[(g, "% Desc.")] = df_num[(g, "% Desc.")].apply(fmt_pct)
-            df_display[(g, "Dif. %")] = df_num[(g, "Dif. %")].apply(fmt_diff)
+            df_display[(g, "\u00A0\u00A0Dif. %\u00A0\u00A0")] = df_num[(g, "\u00A0\u00A0Dif. %\u00A0\u00A0")].apply(fmt_diff)
 
         def aplicar_estilos_matriz(df):
             styles = pd.DataFrame('', index=df.index, columns=df.columns)
@@ -217,7 +223,7 @@ if base_lista:
                     text_color = ""
                     if is_calox: 
                         bg_color = "#e0e0e0" 
-                    elif campo == "Dif. %":
+                    elif "Dif. %" in campo:
                         val = df_num.iat[i, df_num.columns.get_loc(col)]
                         if not pd.isna(val):
                             if val < 0:
@@ -239,16 +245,4 @@ if base_lista:
         
         df_estilizado = df_estilizado.map_index(estilo_indice, axis=0)
         
-        # Configuramos ancho holgado para que los porcentajes >100% no se corten
-        config_columnas = {}
-        for g in grupos_ui:
-            config_columnas[f"{g}_P. Full"] = st.column_config.TextColumn("P. Full", width=75)
-            config_columnas[f"{g}_P. Oferta"] = st.column_config.TextColumn("P. Oferta", width=75)
-            config_columnas[f"{g}_% Desc."] = st.column_config.TextColumn("% Desc.", width=75)
-            config_columnas[f"{g}_Dif. %"] = st.column_config.TextColumn("Dif. %", width=90)
-
-        st.dataframe(
-            df_estilizado,
-            column_config=config_columnas,
-            use_container_width=False
-        )
+        st.dataframe(df_estilizado, use_container_width=True)
